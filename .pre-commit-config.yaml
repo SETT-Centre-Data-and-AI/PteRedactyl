@@ -1,0 +1,77 @@
+exclude: |
+  (?x)(
+    ^.gitignore|
+    ^build.bat|
+    ^commit.bat|
+    ^mypy.ini|
+    ^.pre-commit-config.yaml|
+    ^pyproject.toml|
+    ^README.md|
+    ^CHANGELOG.md|
+    ^docs/    
+  )
+
+repos:
+
+- repo: local
+  hooks:
+    # Check for Jupyter Notebook outputs
+  - id: check-notebooks
+    name: Check Jupyter Notebook Outputs
+    entry: python .hooks/check_notebook_outputs.py
+    language: python
+    types: [jupyter]
+    pass_filenames: true
+
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v6.0.0
+  hooks:
+    # Check for large files
+  - id: check-added-large-files
+    name: Check for files larger than 10 MB
+    args: [--maxkb=10000]
+
+    # Add end of file blank line
+  - id: end-of-file-fixer
+    name: Ensures blank line at the end of scripts
+
+    # Remove trailing whitespace
+  - id: trailing-whitespace
+    name: Check for trailing whitespaces (auto-fixes)
+
+    # Format JSON
+  - id: pretty-format-json
+    name: Formats json files
+    args: [--indent, '2', --no-sort-keys, --autofix]
+    files: \.json$
+
+    # Validate YAML
+  - id: check-yaml
+
+- repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
+  rev: v2.15.0
+  hooks:
+    # Format YAML
+  - id: pretty-format-yaml
+    args: [--autofix, --indent, '2']
+    files: \.ya?ml$
+
+- repo: https://github.com/PyCQA/docformatter
+  rev: v1.7.7
+  hooks:
+  # Wrap docstrings
+  - id: docformatter
+    language: python
+    args: [--wrap-summaries=88, --wrap-descriptions=88, --in-place]
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.13.2
+  hooks:    # https://github.com/astral-sh/ruff-pre-commit/issues/64#issuecomment-2075571181
+  - id: ruff
+    name: sort imports with ruff
+    args: [--select, I, --fix]
+  - id: ruff
+    name: check with ruff
+    args: ['--select=E,F,W,C90,B,B9', '--ignore=E501,B006', --extend-fixable=B007, --fix]
+  - id: ruff-format
+    name: format with ruff

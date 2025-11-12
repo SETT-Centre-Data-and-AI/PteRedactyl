@@ -1,0 +1,65 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+tests/outputs
+.ruff_cache
+.pytest_cache
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+poetry.lock
+uv.lock
+.coverage
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Secrets
+*.env
+
+# VSCode
+*.vscode
+*.code-workspace
+
+# Virtual Envrionments
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Other
+*.xlsx
+*.csv
+*.ipynb
+*.xltx
+
+# Project Specific
+notebooks/
+
+# Project Keep

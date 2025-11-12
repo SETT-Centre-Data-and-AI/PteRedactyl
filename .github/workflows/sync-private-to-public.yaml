@@ -1,0 +1,22 @@
+name: Sync to Public Repo
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  sync-public:
+    if: ${{ github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development' && github.ref_name == 'main' }}
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout private main
+      uses: actions/checkout@v4
+      with:
+        ref: main
+        fetch-depth: 0
+
+    - name: Push main to public repo
+      env:
+        GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
+      run: |
+        git remote add public https://x-access-token:${GH_TOKEN}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
+        git push public main:main --force
