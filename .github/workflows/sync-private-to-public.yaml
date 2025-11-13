@@ -12,10 +12,13 @@ on:
 
 jobs:
   sync-to-public:
-    # Run if private repo, and PR merged
-    if: >
+    # Run if private repo and PR merged or manually triggered
+    if: |
       github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development' &&
-      github.event.pull_request.merged == true
+      (
+        github.event_name == 'workflow_dispatch' ||
+        github.event.pull_request.merged == true
+      )
 
     runs-on: ubuntu-latest
 
@@ -27,17 +30,31 @@ jobs:
         ref: ${{ github.event.pull_request.merge_commit_sha }}
         fetch-depth: 0
 
-    - name: Push to public as 'incoming_from_private'
+    - name: Push to public incoming_from_private
       env:
-        GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
+        PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
-        git remote add public https://x-access-token:${GH_TOKEN}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
-        # Force-update the branch incoming_from_private on the public repo
+        git remote add public https://x-access-token:${PUBLIC_REPO_PAT}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
+        # Force-update incoming_from_private on the public repo from private main
         git push public HEAD:incoming_from_private --force
 
-    - name: Create PR on public repo (incoming_from_private → main)
+    - name: Create or reuse PR on public repo (incoming_from_private → main)
       env:
         GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
-        # Configure gh to use the PAT
-        gh auth login
+        # Authenticate gh with the PAT that has access to the public repo
+        gh auth login --with-token <<< "$GH_TOKEN"
+        gh repo set-default SETT-Centre-Data-and-AI/PteRedactyl
+
+        # Check if an open PR already exists from incoming_from_private to main
+        existing_pr=$(gh pr list --head incoming_from_private --base main --state open --json number --jq '.[0].number')
+
+        if [ -z "$existing_pr" ]; then
+          gh pr create \
+            --head incoming_from_private \
+            --base main \
+            --title "Sync from private main" \
+            --body "Automated sync of private main to public repo."
+        else
+          echo "Open PR #$existing_pr already exists from incoming_from_private to main on public repo."
+        fi
