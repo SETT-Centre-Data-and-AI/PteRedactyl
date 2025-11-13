@@ -15,18 +15,42 @@ env:
   PRIVATE_REPO_RELEASE_BRANCH: main
   PUBLIC_REPO: SETT-Centre-Data-and-AI/PteRedactyl
   PUBLIC_REPO_INCOMING_BRANCH: incoming_from_private
+  TOKEN_NAME: PUBLIC_REPO_PAT
   PRIVATE_GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
 
 jobs:
   sync-to-public:
-    if: ${{ github.repository == env.PRIVATE_REPO && ( github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true ) }}
-
+    # Run if private repo and PR merged or manually triggered
     runs-on: ubuntu-latest
 
     steps:
+    # 0. Decide whether to run
+    - name: Decide whether to run sync
+      env:
+        PRIVATE_REPO_EXPECTED: ${{ env.PRIVATE_REPO }}
+        PR_MERGED: ${{ github.event.pull_request.merged }}
+      run: |
+        echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
+        echo "PRIVATE_REPO_EXPECTED=$PRIVATE_REPO_EXPECTED"
+        echo "GITHUB_EVENT_NAME=$GITHUB_EVENT_NAME"
+        echo "PR_MERGED=$PR_MERGED"
+
+        NEED_SYNC=false
+
+        if [[ "$GITHUB_REPOSITORY" == "$PRIVATE_REPO_EXPECTED" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            NEED_SYNC=true
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" && "$PR_MERGED" == "true" ]]; then
+            NEED_SYNC=true
+          fi
+        fi
+
+        echo "NEED_SYNC=$NEED_SYNC" >> "$GITHUB_ENV"
+        echo "NEED_SYNC is $NEED_SYNC"
 
     # 1. Checkout
-    - name: Checkout private release branch
+    - name: Checkout private main
+      if: env.NEED_SYNC == 'true'
       uses: actions/checkout@v4
       with:
         ref: ${{ env.PRIVATE_REPO_RELEASE_BRANCH }}
@@ -35,16 +59,21 @@ jobs:
 
     # 2. Check PAT is available
     - name: Check PAT is available
+      if: env.NEED_SYNC == 'true'
+      env:
+        TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
+        TOKEN_NAME: ${{ env.TOKEN_NAME }}
       run: |
-        if [ -z "${{ env.PRIVATE_GH_TOKEN }}" ]; then
-          echo "ERROR: PRIVATE_GH_TOKEN is not set or empty"
+        if [ -z "${TOKEN}" ]; then
+          echo "ERROR: Secret ${TOKEN_NAME} is not set or empty"
           exit 1
         else
-          echo "PRIVATE_GH_TOKEN is set (value hidden)"
+          echo "Secret ${TOKEN_NAME} is present (value hidden)"
         fi
 
     # 4. Configure public remote, check if incoming branch exists, and check for existing PR
     - name: Check public repo for branch and PR
+      if: env.NEED_SYNC == 'true'
       env:
         PRIVATE_GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
         PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
@@ -88,6 +117,7 @@ jobs:
 
     # 5. Push to public incoming branch
     - name: Push private release branch to public incoming branch
+      if: env.NEED_SYNC == 'true'
       env:
         PRIVATE_GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
         PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
@@ -101,6 +131,7 @@ jobs:
 
     # 6. Create PR if needed
     - name: Create PR on public repo if needed
+      if: env.NEED_SYNC == 'true'
       env:
         GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
         PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
