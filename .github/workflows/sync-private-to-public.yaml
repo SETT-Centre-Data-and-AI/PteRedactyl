@@ -29,11 +29,24 @@ jobs:
           # Use the merge commit of the PR
         ref: ${{ github.event.pull_request.merge_commit_sha }}
         fetch-depth: 0
+        persist-credentials: false
+
+    - name: Check PAT is available
+      env:
+        PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
+      run: |
+        if [ -z "$PUBLIC_REPO_PAT" ]; then
+          echo "ERROR: PUBLIC_REPO_PAT is not set or empty"
+          exit 1
+        else
+          echo "PUBLIC_REPO_PAT is set (value hidden)"
+        fi
 
     - name: Push to public incoming_from_private
       env:
         PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
+        git config --unset-all http.https://github.com/.extraheader || true
         git remote add public https://x-access-token:${PUBLIC_REPO_PAT}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
         # Force-update incoming_from_private on the public repo from private main
         git push public HEAD:incoming_from_private --force
