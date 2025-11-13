@@ -54,8 +54,7 @@ jobs:
       env:
         GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
-        # Authenticate gh with the PAT that has access to the public repo
-        gh auth login --with-token <<< "$GH_TOKEN"
+        # GH will use GH_TOKEN automatically; no need to login
         gh repo set-default SETT-Centre-Data-and-AI/PteRedactyl
 
         # Check if an open PR already exists from incoming_from_private to main
