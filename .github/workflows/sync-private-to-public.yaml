@@ -19,13 +19,7 @@ env:
 
 jobs:
   sync-to-public:
-    # Run if private repo and PR merged or manually triggered
-    if: |
-      github.repository == env.PRIVATE_REPO &&
-      (
-        github.event_name == 'workflow_dispatch' ||
-        github.event.pull_request.merged == true
-      )
+    if: ${{ github.repository == env.PRIVATE_REPO && ( github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true ) }}
 
     runs-on: ubuntu-latest
 
