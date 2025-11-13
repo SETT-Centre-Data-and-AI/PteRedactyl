@@ -10,11 +10,18 @@ on:
   # Allow Manual Trigger
   workflow_dispatch: {}
 
+env:
+  PRIVATE_REPO: SETT-Centre-Data-and-AI/PteRedactyl_development
+  PRIVATE_REPO_RELEASE_BRANCH: main
+  PUBLIC_REPO: SETT-Centre-Data-and-AI/PteRedactyl
+  PUBLIC_REPO_INCOMING_BRANCH: incoming_from_private
+  PRIVATE_GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
+
 jobs:
   sync-to-public:
     # Run if private repo and PR merged or manually triggered
     if: |
-      github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development' &&
+      github.repository == env.PRIVATE_REPO &&
       (
         github.event_name == 'workflow_dispatch' ||
         github.event.pull_request.merged == true
@@ -23,49 +30,101 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout private main
+
+    # 1. Checkout
+    - name: Checkout private release branch
       uses: actions/checkout@v4
       with:
-        ref: main
+        ref: ${{ env.PRIVATE_REPO_RELEASE_BRANCH }}
         fetch-depth: 0
         persist-credentials: false
 
+    # 2. Check PAT is available
     - name: Check PAT is available
-      env:
-        PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
-        if [ -z "$PUBLIC_REPO_PAT" ]; then
-          echo "ERROR: PUBLIC_REPO_PAT is not set or empty"
+        if [ -z "${{ env.PRIVATE_GH_TOKEN }}" ]; then
+          echo "ERROR: PRIVATE_GH_TOKEN is not set or empty"
           exit 1
         else
-          echo "PUBLIC_REPO_PAT is set (value hidden)"
+          echo "PRIVATE_GH_TOKEN is set (value hidden)"
         fi
 
-    - name: Push to public incoming_from_private
+    # 4. Configure public remote, check if incoming branch exists, and check for existing PR
+    - name: Check public repo for branch and PR
       env:
-        PUBLIC_REPO_PAT: ${{ secrets.PUBLIC_REPO_PAT }}
+        PRIVATE_GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
+        PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
+        PUBLIC_REPO_INCOMING_BRANCH: ${{ env.PUBLIC_REPO_INCOMING_BRANCH }}
+        PRIVATE_REPO_RELEASE_BRANCH: ${{ env.PRIVATE_REPO_RELEASE_BRANCH }}
       run: |
+        # Make sure no GitHub extraheader (with GITHUB_TOKEN) overrides our PAT
         git config --unset-all http.https://github.com/.extraheader || true
-        git remote add public https://x-access-token:${PUBLIC_REPO_PAT}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
-        # Force-update incoming_from_private on the public repo from private main
-        git push public HEAD:refs/heads/incoming_from_private --force
 
-    - name: Create or reuse PR on public repo (incoming_from_private → main)
-      env:
-        GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
-      run: |
-        # GH will use GH_TOKEN automatically; no need to login
-        gh repo set-default SETT-Centre-Data-and-AI/PteRedactyl
+        # Ensure remote 'public' is configured
+        git remote remove public 2>/dev/null || true
+        git remote add public https://x-access-token:${PRIVATE_GH_TOKEN}@github.com/${PUBLIC_REPO}.git
 
-        # Check if an open PR already exists from incoming_from_private to main
-        existing_pr=$(gh pr list --head incoming_from_private --base main --state open --json number --jq '.[0].number')
-
-        if [ -z "$existing_pr" ]; then
-          gh pr create \
-            --head incoming_from_private \
-            --base main \
-            --title "Sync from private main" \
-            --body "Automated sync of private main to public repo."
+        echo "Checking if branch ${PUBLIC_REPO_INCOMING_BRANCH} exists on public..."
+        branch_ref=$(git ls-remote --heads public "refs/heads/${PUBLIC_REPO_INCOMING_BRANCH}" || true)
+        if [ -n "$branch_ref" ]; then
+          echo "Public branch ${PUBLIC_REPO_INCOMING_BRANCH} already exists."
+          echo "PUBLIC_BRANCH_EXISTS=true" >> "$GITHUB_ENV"
         else
-          echo "Open PR #$existing_pr already exists from incoming_from_private to main on public repo."
+          echo "Public branch ${PUBLIC_REPO_INCOMING_BRANCH} does not exist yet."
+          echo "PUBLIC_BRANCH_EXISTS=false" >> "$GITHUB_ENV"
         fi
+
+        echo "Checking for existing open PR from ${PUBLIC_REPO_INCOMING_BRANCH} to ${PRIVATE_REPO_RELEASE_BRANCH} on ${PUBLIC_REPO}..."
+        export GH_TOKEN="$PRIVATE_GH_TOKEN"
+        existing_pr=$(gh pr list \
+          --repo "$PUBLIC_REPO" \
+          --head "${PUBLIC_REPO_INCOMING_BRANCH}" \
+          --base "${PRIVATE_REPO_RELEASE_BRANCH}" \
+          --state open \
+          --json number \
+          --jq '.[0].number' || true)
+
+        if [ -n "$existing_pr" ]; then
+          echo "Found existing PR #$existing_pr."
+        else
+          echo "No existing open PR."
+        fi
+
+        echo "EXISTING_PR=$existing_pr" >> "$GITHUB_ENV"
+
+    # 5. Push to public incoming branch
+    - name: Push private release branch to public incoming branch
+      env:
+        PRIVATE_GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
+        PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
+        PUBLIC_REPO_INCOMING_BRANCH: ${{ env.PUBLIC_REPO_INCOMING_BRANCH }}
+      run: |
+        # Remote 'public' already added in previous step, but ensure it exists
+        git remote show public >/dev/null 2>&1 || git remote add public https://x-access-token:${PRIVATE_GH_TOKEN}@github.com/${PUBLIC_REPO}.git
+
+        echo "Pushing HEAD to public:${PUBLIC_REPO_INCOMING_BRANCH}..."
+        git push public HEAD:refs/heads/${PUBLIC_REPO_INCOMING_BRANCH} --force
+
+    # 6. Create PR if needed
+    - name: Create PR on public repo if needed
+      env:
+        GH_TOKEN: ${{ env.PRIVATE_GH_TOKEN }}
+        PUBLIC_REPO: ${{ env.PUBLIC_REPO }}
+        PUBLIC_REPO_INCOMING_BRANCH: ${{ env.PUBLIC_REPO_INCOMING_BRANCH }}
+        PRIVATE_REPO_RELEASE_BRANCH: ${{ env.PRIVATE_REPO_RELEASE_BRANCH }}
+      run: |
+        # EXISTING_PR (if set) comes from the previous step via GITHUB_ENV
+        echo "Existing PR: ${EXISTING_PR:-<none>}"
+
+        if [ -n "${EXISTING_PR:-}" ]; then
+          echo "Skipping PR creation because PR #$EXISTING_PR already exists."
+          exit 0
+        fi
+
+        echo "Creating PR from ${PUBLIC_REPO_INCOMING_BRANCH} to ${PRIVATE_REPO_RELEASE_BRANCH} on ${PUBLIC_REPO}..."
+        gh pr create \
+          --repo "$PUBLIC_REPO" \
+          --head "${PUBLIC_REPO_INCOMING_BRANCH}" \
+          --base "${PRIVATE_REPO_RELEASE_BRANCH}" \
+          --title "Sync from private ${PRIVATE_REPO_RELEASE_BRANCH}" \
+          --body "Automated sync of private ${PRIVATE_REPO_RELEASE_BRANCH} to public repo."

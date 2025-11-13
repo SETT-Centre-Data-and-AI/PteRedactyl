@@ -1,6 +1,6 @@
 [project]
 name = "pteredactyl"
-version = "1.0.0"
+version = "1.1.0"
 description = "Pteredactyl is a tool for NER based redaction of personally identifiable information in text"
 authors = [{ name = "Cai Davis", email = "cai.davis@uhs.nhs.uk"}, {name = "Michael George", email= "michael.george@uhs.nhs.uk" }]
 requires-python = ">=3.11,<3.14"
