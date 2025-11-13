@@ -3,32 +3,74 @@ name: Publish to PyPI
 on:
   workflow_dispatch: {}
 
+env:
+  RELEASE_REPO: SETT-Centre-Data-and-AI/PteRedactyl
+  RELEASE_BRANCH: main
+  PYTHON_VERSION: '3.13'
+  PYPI_USERNAME: __token__
+  PYPI_TOKEN_SECRET_NAME: PYPI_API_TOKEN
+
 jobs:
   build-and-publish:
-    if: ${{ github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl' && github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
     environment: pypi
 
     steps:
-    - uses: actions/checkout@v4
+    # 1. Decide whether to publish
+    - name: Decide whether to publish
+      env:
+        RELEASE_REPO: ${{ env.RELEASE_REPO }}
+        RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
+        CURRENT_REPO: ${{ github.repository }}
+        CURRENT_REF_NAME: ${{ github.ref_name }}
+      run: |
+        echo "Current repo: $CURRENT_REPO"
+        echo "Current ref: $CURRENT_REF_NAME"
+        echo "Release repo: $RELEASE_REPO"
+        echo "Release branch: $RELEASE_BRANCH"
 
-    - uses: actions/setup-python@v5
+        NEED_PUBLISH=false
+        if [[ "$CURRENT_REPO" == "$RELEASE_REPO" && "$CURRENT_REF_NAME" == "$RELEASE_BRANCH" ]]; then
+          NEED_PUBLISH=true
+        fi
+
+        echo "NEED_PUBLISH=$NEED_PUBLISH" >> "$GITHUB_ENV"
+        echo "NEED_PUBLISH is $NEED_PUBLISH"
+
+    # 2. Early exit if we shouldn't publish
+    - name: Stop if publish not needed
+      if: env.NEED_PUBLISH != 'true'
+      run: |
+        echo "Publish not required for this invocation. Exiting job."
+        exit 0
+
+    # 3. Checkout
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 4. Python setup
+    - name: Setup Python
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.13'
+        python-version: ${{ env.PYTHON_VERSION }}
 
+    # 5. Install build tools
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
         python -m pip install --upgrade build twine
 
+    # 6. Build distributions
     - name: Build dists
       run: python -m build
 
+    # 7. Validate distributions
     - name: Validate dists
       run: python -m twine check dist/*
 
+    # 8. Install wheel and smoke test
     - name: Install wheel and smoke test
       run: |
         python -m pip install dist/*.whl
@@ -37,8 +79,9 @@ jobs:
         print("pteredactyl OK, version:", getattr(pteredactyl, "__version__", "unknown"))
         PY
 
+    # 9. Publish to PyPI
     - name: Publish to PyPI
       env:
-        TWINE_USERNAME: __token__
+        TWINE_USERNAME: ${{ env.PYPI_USERNAME }}
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: python -m twine upload dist/*
