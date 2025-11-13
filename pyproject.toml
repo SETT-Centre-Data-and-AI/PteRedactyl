@@ -21,7 +21,6 @@ dependencies = [
     "ipykernel>=6.26.0,<7",
     "ipywidgets>=8.1.1,<9",
     "pandas>=2.2.0,<3",
-    "datakraken>=1.1.8",
     "pip>=25.3",
 ]
 

@@ -1,6 +1,1 @@
-## v1.0.0 (2025-10-28)
-
-### Feat
-
-- **readme**: removed developer guide
-- **changelog**: reset changelog
+## v1.1.0 (2025-11-13)

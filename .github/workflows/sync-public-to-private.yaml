@@ -1,0 +1,53 @@
+name: Sync From Public
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  sync-from-public:
+    if: github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout private repo
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Fetch public main
+      env:
+        GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
+      run: |
+        git remote add public https://x-access-token:${GH_TOKEN}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
+        git fetch public main
+
+    - name: Update incoming_from_public from public/main
+      run: |
+        # Create or reset local branch incoming_from_public to public/main
+        git switch -C incoming_from_public public/main
+        git push origin incoming_from_public --force
+
+    - name: Create or reuse PR to private main (incoming_from_public → main)
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        # Use GITHUB_TOKEN for the private repo via gh
+        gh auth login --with-token <<< "$GH_TOKEN"
+        gh repo set-default SETT-Centre-Data-and-AI/PteRedactyl_development
+
+        # Check if an open PR already exists from incoming_from_public to main
+        existing_pr=$(gh pr list --head incoming_from_public --base main --state open --json number --jq '.[0].number')
+
+        if [ -z "$existing_pr" ]; then
+          gh pr create \
+            --head incoming_from_public \
+            --base main \
+            --title "Sync from public main" \
+            --body "Automated sync of public main into private repo."
+        else
+          echo "Open PR #$existing_pr already exists from incoming_from_public to main on private repo."
+        fi

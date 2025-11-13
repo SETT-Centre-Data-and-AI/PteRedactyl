@@ -1,22 +1,43 @@
-name: Sync to Public Repo
+name: Sync Private to Public
 
 on:
+  # Trigger when PR closed
+  pull_request:
+    types: [closed]
+    branches:
+    - main
+
+  # Allow Manual Trigger
   workflow_dispatch: {}
 
 jobs:
-  sync-public:
-    if: ${{ github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development' && github.ref_name == 'main' }}
+  sync-to-public:
+    # Run if private repo, and PR merged
+    if: >
+      github.repository == 'SETT-Centre-Data-and-AI/PteRedactyl_development' &&
+      github.event.pull_request.merged == true
+
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout private main
+    - name: Checkout merge commit from private main
       uses: actions/checkout@v4
       with:
-        ref: main
+          # Use the merge commit of the PR
+        ref: ${{ github.event.pull_request.merge_commit_sha }}
         fetch-depth: 0
 
-    - name: Push main to public repo
+    - name: Push to public as 'incoming_from_private'
       env:
         GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
       run: |
         git remote add public https://x-access-token:${GH_TOKEN}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
-        git push public main:main --force
+        # Force-update the branch incoming_from_private on the public repo
+        git push public HEAD:incoming_from_private --force
+
+    - name: Create PR on public repo (incoming_from_private → main)
+      env:
+        GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
+      run: |
+        # Configure gh to use the PAT
+        gh auth login
