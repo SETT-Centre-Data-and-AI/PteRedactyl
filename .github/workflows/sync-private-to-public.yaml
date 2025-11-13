@@ -11,11 +11,14 @@ on:
   workflow_dispatch: {}
 
 env:
+  # Set variables
   PRIVATE_REPO: SETT-Centre-Data-and-AI/PteRedactyl_development
   PRIVATE_REPO_RELEASE_BRANCH: main
   PUBLIC_REPO: SETT-Centre-Data-and-AI/PteRedactyl
   PUBLIC_REPO_INCOMING_BRANCH: incoming_from_private
   TOKEN_NAME: PUBLIC_REPO_PAT
+
+  # Auto
   PRIVATE_GH_TOKEN: ${{ secrets.PUBLIC_REPO_PAT }}
 
 jobs:
@@ -24,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 0. Decide whether to run
+    # 1. Decide whether to run
     - name: Decide whether to run sync
       env:
         PRIVATE_REPO_EXPECTED: ${{ env.PRIVATE_REPO }}
@@ -48,7 +51,14 @@ jobs:
         echo "NEED_SYNC=$NEED_SYNC" >> "$GITHUB_ENV"
         echo "NEED_SYNC is $NEED_SYNC"
 
-    # 1. Checkout
+    # 2. Stop if sync not needed
+    - name: Stop if sync not needed
+      if: env.NEED_SYNC != 'true'
+      run: |
+        echo "Sync not required for this event."
+        exit 0
+
+    # 3. Checkout
     - name: Checkout private main
       if: env.NEED_SYNC == 'true'
       uses: actions/checkout@v4
@@ -57,7 +67,7 @@ jobs:
         fetch-depth: 0
         persist-credentials: false
 
-    # 2. Check PAT is available
+    # 4. Check PAT is available
     - name: Check PAT is available
       if: env.NEED_SYNC == 'true'
       env:
@@ -71,7 +81,7 @@ jobs:
           echo "Secret ${TOKEN_NAME} is present (value hidden)"
         fi
 
-    # 4. Configure public remote, check if incoming branch exists, and check for existing PR
+    # 5. Configure public remote, check if incoming branch exists, and check for existing PR
     - name: Check public repo for branch and PR
       if: env.NEED_SYNC == 'true'
       env:
@@ -115,7 +125,7 @@ jobs:
 
         echo "EXISTING_PR=$existing_pr" >> "$GITHUB_ENV"
 
-    # 5. Push to public incoming branch
+    # 6. Push to public incoming branch
     - name: Push private release branch to public incoming branch
       if: env.NEED_SYNC == 'true'
       env:
@@ -129,7 +139,7 @@ jobs:
         echo "Pushing HEAD to public:${PUBLIC_REPO_INCOMING_BRANCH}..."
         git push public HEAD:refs/heads/${PUBLIC_REPO_INCOMING_BRANCH} --force
 
-    # 6. Create PR if needed
+    # 7. Create PR if needed
     - name: Create PR on public repo if needed
       if: env.NEED_SYNC == 'true'
       env:
