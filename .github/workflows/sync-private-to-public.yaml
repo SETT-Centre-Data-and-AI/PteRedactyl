@@ -23,11 +23,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout merge commit from private main
+    - name: Checkout private main
       uses: actions/checkout@v4
       with:
-          # Use the merge commit of the PR
-        ref: ${{ github.event.pull_request.merge_commit_sha }}
+        ref: main
         fetch-depth: 0
         persist-credentials: false
 
@@ -49,7 +48,7 @@ jobs:
         git config --unset-all http.https://github.com/.extraheader || true
         git remote add public https://x-access-token:${PUBLIC_REPO_PAT}@github.com/SETT-Centre-Data-and-AI/PteRedactyl.git
         # Force-update incoming_from_private on the public repo from private main
-        git push public HEAD:incoming_from_private --force
+        git push public HEAD:refs/heads/incoming_from_private --force
 
     - name: Create or reuse PR on public repo (incoming_from_private → main)
       env:
